@@ -17,24 +17,14 @@ const ALL_WORKERS = ['Bader', 'Yassine', 'Abderrazak', 'Salah', UNASSIGNED_WORKE
 // Time Slot Config
 const TIME_CUTOFF_HOUR = 18; 
 const TIME_CUTOFF_MINUTE = 7; 
-const YOUR_HARDCODED_COOKIE_VALUE = "[PASTE YOUR ENTIRE COOKIE HEADER VALUE HERE]"; // Must be updated with a fresh cookie value!
 
-// --- HELPER FUNCTIONS ---
+// --- AUTHENTICATION FIX: Use Environment Variable (Secure Mobile Access) ---
+// We read the secret cookie string from the environment variable set in Vercel/Netlify.
+// Variable name is REACT_APP_LIVO_AUTH_COOKIE
+const LIVO_AUTH_COOKIE = process.env.REACT_APP_LIVO_AUTH_COOKIE || "";
 
-const getTimeSlot = (transferDate) => {
-    const now = new Date();
-    const cutoffToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), TIME_CUTOFF_HOUR, TIME_CUTOFF_MINUTE, 0);
 
-    const isToday = transferDate.toDateString() === now.toDateString();
-    
-    if (isToday && transferDate < cutoffToday) {
-        return 'Morning Transfers (Today Before 18:07)';
-    }
-    
-    return 'Evening Transfers (Today After 18:07)';
-};
-
-// --- STYLES (Externalized for Clarity and Reusability) ---
+// --- STYLES (Externalized for Clarity and Reusability & Responsiveness) ---
 const styles = {
     // Main Container
     dashboard: { 
@@ -47,15 +37,15 @@ const styles = {
     header: {
         backgroundColor: '#1f2937', 
         color: 'white',
-        padding: '20px 40px',
+        padding: '20px 20px', // Adjusted padding for mobile
         boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
         display: 'flex',
         flexDirection: 'column',
     },
     // Content Area
     content: {
-        padding: '40px 20px', // More vertical padding
-        maxWidth: '1400px', // Centralize content on wide screens
+        padding: '20px 20px 40px', // Adjusted padding for mobile
+        maxWidth: '1400px', 
         margin: '0 auto',
     },
     // Worker Tabs Container
@@ -63,7 +53,7 @@ const styles = {
         display: 'flex', 
         gap: '10px',
         flexWrap: 'wrap',
-        marginBottom: '25px',
+        marginBottom: '15px',
     },
     // Time Slot Header
     timeSlotHeader: (isMorning) => ({
@@ -99,6 +89,18 @@ const styles = {
     }
 };
 
+// --- HELPER FUNCTIONS ---
+const getTimeSlot = (transferDate) => {
+    const now = new Date();
+    const cutoffToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), TIME_CUTOFF_HOUR, TIME_CUTOFF_MINUTE, 0);
+    const isToday = transferDate.toDateString() === now.toDateString();
+    
+    if (isToday && transferDate < cutoffToday) {
+        return 'Morning Transfers (Today Before 18:07)';
+    }
+    return 'Evening Transfers (Today After 18:07)';
+};
+
 function TransfertComponent() {
   // --- STATE MANAGEMENT ---
   const [transfers, setTransfers] = useState([]); 
@@ -109,8 +111,10 @@ function TransfertComponent() {
   // --- DATA FETCHING ---
   useEffect(() => {
     const fetchTransfers = async () => {
-        if (YOUR_HARDCODED_COOKIE_VALUE.length < 50) { 
-            setError('Auth Error: Please update the hardcoded cookie value.');
+        // 1. Check if the secure variable is set
+        if (LIVO_AUTH_COOKIE.length < 50) { 
+            // Display an error that guides the user to the fix
+            setError('Auth Error: Please set the LIVO_AUTH_COOKIE environment variable in Vercel/Netlify.');
             setIsLoading(false);
             return;
         }
@@ -118,15 +122,17 @@ function TransfertComponent() {
       try {
         const response = await axios.get(API_URL, {
           headers: {
-            'Cookie': YOUR_HARDCODED_COOKIE_VALUE, // Sending cookie value as header
+            // 2. Send the cookie string explicitly as a header
+            'Cookie': LIVO_AUTH_COOKIE,
           },
+          // 3. DO NOT use withCredentials: true
         });
         
         const transferData = response.data?.data?.data || []; 
         setTransfers(transferData);
         setIsLoading(false);
       } catch (err) {
-        setError('Failed to fetch data. Check API URL or hardcoded cookie/token status.');
+        setError('Failed to fetch data. Authentication cookie is likely expired or invalid.');
         setIsLoading(false);
         console.error('API Fetch Error:', err);
       }
@@ -135,14 +141,12 @@ function TransfertComponent() {
   }, []); 
 
 
-  // --- MULTI-LEVEL GROUPING LOGIC ---
+  // --- MULTI-LEVEL GROUPING LOGIC (same as before) ---
   const groupedTransfersByWorkerTimeAndClient = useMemo(() => {
     const allGroups = {};
-
     transfers.forEach(transfer => {
       const city = transfer.to_city.toLowerCase();
       const transferDate = new Date(transfer.timestamps.created);
-
       let workerName = UNASSIGNED_WORKER;
       for (const [worker, cities] of Object.entries(WORKER_CITY_MAP)) {
         if (cities.includes(city)) {
@@ -150,7 +154,6 @@ function TransfertComponent() {
           break;
         }
       }
-
       const timeSlot = getTimeSlot(transferDate);
       const clientBrand = transfer.client?.brand?.name || 'Unknown Client';
       
@@ -160,7 +163,6 @@ function TransfertComponent() {
       
       allGroups[workerName][timeSlot][clientBrand].push(transfer);
     });
-
     return allGroups;
   }, [transfers]);
 
@@ -176,10 +178,12 @@ function TransfertComponent() {
 
   if (error) {
     return (
-      <div style={{ padding: '40px', color: '#ff4d4d', backgroundColor: '#fff0f0', border: '1px solid #ff4d4d', margin: '20px', borderRadius: '8px' }}>
+      <div style={{ padding: '20px', color: '#ff4d4d', backgroundColor: '#fff0f0', border: '1px solid #ff4d4d', margin: '20px', borderRadius: '8px' }}>
         <h2>Error Loading Data ❌</h2>
         <p>{error}</p>
-        <p>Fix: You need to update the `YOUR_HARDCODED_COOKIE_VALUE` in the source code with a fresh, valid session cookie from your desktop browser's network tab.</p>
+        {LIVO_AUTH_COOKIE.length < 50 && (
+            <p><strong>Action Required:</strong> Please set the `REACT_APP_LIVO_AUTH_COOKIE` variable in your hosting platform.</p>
+        )}
       </div>
     );
   }
@@ -213,7 +217,7 @@ function TransfertComponent() {
                   backgroundColor: activeWorker === worker ? '#3b82f6' : 'transparent', 
                   color: activeWorker === worker ? 'white' : '#9ca3af',
                   transition: 'all 0.2s ease',
-                  whiteSpace: 'nowrap', // Prevents button text wrapping
+                  whiteSpace: 'nowrap', 
                 }}
               >
                 {worker}
