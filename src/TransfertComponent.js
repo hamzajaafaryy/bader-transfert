@@ -17,6 +17,7 @@ const ALL_WORKERS = ['Bader', 'Yassine', 'Abderrazak', 'Salah', UNASSIGNED_WORKE
 // Time Slot Config
 const TIME_CUTOFF_HOUR = 18; 
 const TIME_CUTOFF_MINUTE = 7; 
+const YOUR_HARDCODED_COOKIE_VALUE = "[PASTE YOUR ENTIRE COOKIE HEADER VALUE HERE]"; // Must be updated with a fresh cookie value!
 
 // --- HELPER FUNCTIONS ---
 
@@ -33,6 +34,70 @@ const getTimeSlot = (transferDate) => {
     return 'Evening Transfers (Today After 18:07)';
 };
 
+// --- STYLES (Externalized for Clarity and Reusability) ---
+const styles = {
+    // Main Container
+    dashboard: { 
+        padding: 0, 
+        fontFamily: 'system-ui, sans-serif', 
+        backgroundColor: '#f9fafb', 
+        minHeight: '100vh',
+    },
+    // Header Bar (Dark, fixed height)
+    header: {
+        backgroundColor: '#1f2937', 
+        color: 'white',
+        padding: '20px 40px',
+        boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+        display: 'flex',
+        flexDirection: 'column',
+    },
+    // Content Area
+    content: {
+        padding: '40px 20px', // More vertical padding
+        maxWidth: '1400px', // Centralize content on wide screens
+        margin: '0 auto',
+    },
+    // Worker Tabs Container
+    tabsContainer: {
+        display: 'flex', 
+        gap: '10px',
+        flexWrap: 'wrap',
+        marginBottom: '25px',
+    },
+    // Time Slot Header
+    timeSlotHeader: (isMorning) => ({
+        padding: '15px 20px', 
+        marginBottom: '20px',
+        backgroundColor: isMorning ? '#fef3c7' : '#eef2ff', 
+        borderRadius: '8px',
+    }),
+    // Client Card Grid (Responsive)
+    clientGrid: {
+        display: 'grid',
+        // Responsive grid: minimum card width is 220px, auto-fills the space
+        gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', 
+        gap: '20px',
+        marginBottom: '40px',
+    },
+    // Individual Client Card
+    clientCard: {
+        border: '1px solid #e5e7eb', 
+        borderRadius: '12px', 
+        padding: '15px', 
+        backgroundColor: 'white',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+        position: 'relative',
+        transition: 'transform 0.2s ease',
+    },
+    // Product List inside card
+    productList: {
+        display: 'flex', 
+        flexDirection: 'column', 
+        gap: '5px',
+        marginTop: '10px',
+    }
+};
 
 function TransfertComponent() {
   // --- STATE MANAGEMENT ---
@@ -44,16 +109,24 @@ function TransfertComponent() {
   // --- DATA FETCHING ---
   useEffect(() => {
     const fetchTransfers = async () => {
+        if (YOUR_HARDCODED_COOKIE_VALUE.length < 50) { 
+            setError('Auth Error: Please update the hardcoded cookie value.');
+            setIsLoading(false);
+            return;
+        }
+
       try {
         const response = await axios.get(API_URL, {
-          withCredentials: true 
+          headers: {
+            'Cookie': YOUR_HARDCODED_COOKIE_VALUE, // Sending cookie value as header
+          },
         });
         
         const transferData = response.data?.data?.data || []; 
         setTransfers(transferData);
         setIsLoading(false);
       } catch (err) {
-        setError('Failed to fetch data. Check browser console for details.');
+        setError('Failed to fetch data. Check API URL or hardcoded cookie/token status.');
         setIsLoading(false);
         console.error('API Fetch Error:', err);
       }
@@ -93,7 +166,6 @@ function TransfertComponent() {
 
 
   // --- RENDER LOGIC ---
-  
   if (isLoading) {
     return (
       <div style={{ padding: '40px', textAlign: 'center', fontSize: '1.2em' }}>
@@ -107,6 +179,7 @@ function TransfertComponent() {
       <div style={{ padding: '40px', color: '#ff4d4d', backgroundColor: '#fff0f0', border: '1px solid #ff4d4d', margin: '20px', borderRadius: '8px' }}>
         <h2>Error Loading Data ❌</h2>
         <p>{error}</p>
+        <p>Fix: You need to update the `YOUR_HARDCODED_COOKIE_VALUE` in the source code with a fresh, valid session cookie from your desktop browser's network tab.</p>
       </div>
     );
   }
@@ -114,22 +187,18 @@ function TransfertComponent() {
   const activeWorkerData = groupedTransfersByWorkerTimeAndClient[activeWorker] || {};
 
   return (
-    <div style={{ padding: '0', fontFamily: 'system-ui, sans-serif', backgroundColor: '#f9fafb', minHeight: '100vh' }}>
+    <div style={styles.dashboard}>
       
       {/* HEADER & TABS CONTAINER */}
-      <div style={{ 
-        backgroundColor: '#1f2937', // Dark header background
-        color: 'white',
-        padding: '20px 40px',
-        boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
-      }}>
+      <div style={styles.header}>
         <h1 style={{ margin: '0 0 15px 0', fontSize: '1.8em', fontWeight: 600 }}>
           📦 Pending Transfers Dashboard
         </h1>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '15px' }}>
+          
           {/* WORKER TABS */}
-          <div style={{ display: 'flex', gap: '15px' }}>
+          <div style={styles.tabsContainer}>
             {ALL_WORKERS.map(worker => (
               <button
                 key={worker}
@@ -141,10 +210,10 @@ function TransfertComponent() {
                   cursor: 'pointer',
                   fontSize: '1em',
                   fontWeight: activeWorker === worker ? 'bold' : 'normal',
-                  backgroundColor: activeWorker === worker ? '#3b82f6' : 'transparent', // Blue accent
+                  backgroundColor: activeWorker === worker ? '#3b82f6' : 'transparent', 
                   color: activeWorker === worker ? 'white' : '#9ca3af',
                   transition: 'all 0.2s ease',
-                  borderBottom: activeWorker === worker ? '3px solid #3b82f6' : '3px solid transparent'
+                  whiteSpace: 'nowrap', // Prevents button text wrapping
                 }}
               >
                 {worker}
@@ -158,10 +227,11 @@ function TransfertComponent() {
               border: 'none',
               borderRadius: '6px',
               cursor: 'pointer',
-              backgroundColor: '#10b981', // Green accent
+              backgroundColor: '#10b981', 
               color: 'white',
               fontWeight: 'bold',
-              fontSize: '0.9em'
+              fontSize: '0.9em',
+              whiteSpace: 'nowrap',
           }}>
               Mark as Processed <span style={{ backgroundColor: 'white', color: '#10b981', padding: '1px 7px', borderRadius: '4px', marginLeft: '8px' }}>1</span>
           </button>
@@ -169,10 +239,10 @@ function TransfertComponent() {
       </div>
       
       {/* MAIN CONTENT AREA */}
-      <div style={{ padding: '40px' }}>
+      <div style={styles.content}>
         
         {/* TRANSFER GROUPS BY TIME SLOT */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '40px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
           
           {Object.entries(activeWorkerData)
               .sort(([slotA]) => slotA.includes('Morning') ? -1 : 1)
@@ -181,25 +251,21 @@ function TransfertComponent() {
                   
                   return (
                       <div key={timeSlot}>
+                          
                           {/* Time Slot Header */}
-                          <div style={{ 
-                              padding: '15px 20px', 
-                              marginBottom: '20px',
-                              backgroundColor: isMorning ? '#fef3c7' : '#eef2ff', // Soft light background
-                              borderRadius: '8px',
-                          }}>
+                          <div style={styles.timeSlotHeader(isMorning)}>
                               <h2 style={{ 
                                   margin: '0', 
-                                  fontSize: '1.4em', 
+                                  fontSize: '1.3em', 
                                   fontWeight: 600,
-                                  color: isMorning ? '#d97706' : '#6366f1', // Deep colors for contrast
+                                  color: isMorning ? '#d97706' : '#6366f1', 
                               }}>
                                   {timeSlot}
                               </h2>
                           </div>
 
                           {/* Client Cards Grid */}
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '20px' }}>
+                          <div style={styles.clientGrid}>
                               {Object.entries(clientGroups).map(([clientBrand, transfersList]) => {
                                   // Calculate total products per unique product for this client
                                   const productCounts = transfersList.reduce((acc, transfer) => {
@@ -213,15 +279,7 @@ function TransfertComponent() {
                                   const totalTransfers = transfersList.length;
 
                                   return (
-                                      <div key={clientBrand} style={{ 
-                                          border: '1px solid #e5e7eb', 
-                                          borderRadius: '12px', 
-                                          padding: '15px', 
-                                          backgroundColor: 'white',
-                                          boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                                          position: 'relative',
-                                          overflow: 'hidden'
-                                      }}>
+                                      <div key={clientBrand} style={styles.clientCard}>
                                           
                                           {/* Client Brand Header */}
                                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
@@ -232,7 +290,7 @@ function TransfertComponent() {
                                                   backgroundColor: '#3b82f6', 
                                                   color: 'white', 
                                                   padding: '2px 8px', 
-                                                  borderRadius: '9999px', // Pill shape
+                                                  borderRadius: '9999px', 
                                                   fontSize: '0.75em',
                                                   fontWeight: 'bold'
                                               }}>
@@ -243,7 +301,7 @@ function TransfertComponent() {
                                           <hr style={{ border: 'none', height: '1px', backgroundColor: '#e5e7eb', margin: '10px 0' }} />
 
                                           {/* Products List */}
-                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                                          <div style={styles.productList}>
                                               {Object.entries(productCounts).map(([productName, count]) => (
                                                   <div key={productName} style={{ 
                                                       display: 'flex',
