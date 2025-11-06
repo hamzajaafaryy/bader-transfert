@@ -1,56 +1,292 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 
-// --- API Configuration ---
+// --- Configuration ---
 const API_URL = 'https://rest.livo.ma/transfers?status=pending&products.refr=not_exists&_limit=1000&_sort=-timestamps.updated';
 
-// --- Worker City Assignments ---
 const WORKER_CITY_MAP = {
   Bader: ['tanger'],
   Abderrazak: ['oujda', 'guelmim', 'azemmour', 'kelaa des sraghna'],
   Yassine: ['agadir', 'marrakech', 'sale', 'sidi sliman'],
   Salah: ['deroua', 'casablanca', 'midelt', 'beni melal', 'khouribga', 'safi'],
 };
+
 const UNASSIGNED_WORKER = 'Other / Unassigned';
-const ALL_WORKERS = ['Bader', 'Yassine', 'Abderrazak', 'Salah', UNASSIGNED_WORKER]; // List for navigation tabs
+const ALL_WORKERS = ['Bader', 'Yassine', 'Abderrazak', 'Salah', UNASSIGNED_WORKER];
 
-// --- Time Slot Configuration ---
-const TIME_CUTOFF_HOUR = 18; 
-const TIME_CUTOFF_MINUTE = 7; 
+const TIME_CUTOFF_HOUR = 18;
+const TIME_CUTOFF_MINUTE = 7;
 
-// Helper to determine Morning or Evening slot
 const getTimeSlot = (transferDate) => {
-    const now = new Date();
-    const cutoffToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), TIME_CUTOFF_HOUR, TIME_CUTOFF_MINUTE, 0);
-
-    const isToday = transferDate.toDateString() === now.toDateString();
-    
-    if (isToday && transferDate < cutoffToday) {
-        return 'Morning Transfers (Today Before 18:07)';
-    }
-    
-    // For simplicity, everything else (Today After 18:07, or Yesterday/Older transfers) 
-    // goes into Evening, mimicking the image structure for non-morning slots.
-    return 'Evening Transfers (Today After 18:07)';
+  const now = new Date();
+  const cutoffToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), TIME_CUTOFF_HOUR, TIME_CUTOFF_MINUTE, 0);
+  const isToday = transferDate.toDateString() === now.toDateString();
+  if (isToday && transferDate < cutoffToday) {
+    return 'Morning Transfers (Today Before 18:07)';
+  }
+  return 'Evening Transfers (Today After 18:07)';
 };
 
+// --- Inject global styles ---
+const globalStyles = `
+  .transfers-app {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: #f9fafb;
+    min-height: 100vh;
+    padding: 1.5rem;
+    color: #111827;
+  }
+
+  .header {
+    font-size: 1.875rem;
+    font-weight: 700;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: #1e293b;
+  }
+
+  .tabs-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+    padding: 1rem;
+    margin-bottom: 2.5rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .tabs {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .tab-btn {
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    background: transparent;
+    color: #7c3aed;
+    transition: all 0.2s ease;
+  }
+
+  .tab-btn.active {
+    background: #7c3aed;
+    color: white;
+    font-weight: 600;
+  }
+
+  .tab-btn:hover:not(.active) {
+    background: #f3f4f6;
+  }
+
+  .process-btn {
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 8px;
+    background: #10b981;
+    color: white;
+    font-weight: 600;
+    font-size: 0.875rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: background 0.2s;
+  }
+
+  .process-btn:hover {
+    background: #0da271;
+  }
+
+  .process-badge {
+    background: white;
+    color: #10b981;
+    padding: 0.125rem 0.5rem;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 0.75rem;
+  }
+
+  .slot-card {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+    margin-bottom: 2rem;
+    overflow: hidden;
+  }
+
+  .slot-header {
+    padding: 1rem 1.5rem;
+    margin-bottom: 1.25rem;
+    font-size: 1.25rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .slot-header.morning {
+    background: #fffbeb;
+    border-left: 4px solid #f59e0b;
+    color: #d97706;
+  }
+
+  .slot-header.evening {
+    background: #f0f9ff;
+    border-left: 4px solid #3b82f6;
+    color: #1d4ed8;
+  }
+
+  .clients-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1.25rem;
+    padding: 0 1.5rem 1.5rem;
+  }
+
+  @media (max-width: 640px) {
+    .clients-grid {
+      grid-template-columns: 1fr;
+      padding: 0 1rem 1rem;
+    }
+  }
+
+  .client-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 1rem;
+    background: #fafafa;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    cursor: pointer;
+  }
+
+  .client-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px -2px rgba(0,0,0,0.1);
+    background: white;
+  }
+
+  .client-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 0.75rem;
+  }
+
+  .client-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #1f2937;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .client-count {
+    background: #7c3aed;
+    color: white;
+    padding: 0.25rem 0.5rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+    margin-left: 0.5rem;
+  }
+
+  .product-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.375rem 0;
+    background: #f9fafb;
+    border-radius: 4px;
+    margin-top: 0.25rem;
+    font-size: 0.875rem;
+  }
+
+  .product-name {
+    color: #4b5563;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .product-qty {
+    font-weight: 700;
+    color: #ef4444;
+    margin-left: 0.5rem;
+    min-width: 20px;
+    text-align: right;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 2rem;
+    color: #6b7280;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    background: white;
+    margin: 0 1.5rem;
+  }
+
+  .skeleton {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: loading 1.5s infinite;
+    border-radius: 4px;
+  }
+
+  @keyframes loading {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  .loading-screen {
+    padding: 2rem;
+  }
+
+  .error-message {
+    text-align: center;
+    padding: 2.5rem 1.5rem;
+    color: #b91c1c;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 12px;
+    margin: 2rem;
+  }
+`;
 
 function TransfertComponent() {
-  // --- STATE MANAGEMENT ---
-  const [transfers, setTransfers] = useState([]); 
-  const [isLoading, setIsLoading] = useState(true); 
-  const [error, setError] = useState(null); 
-  const [activeWorker, setActiveWorker] = useState(ALL_WORKERS[0]); 
+  const [transfers, setTransfers] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [activeWorker, setActiveWorker] = useState(ALL_WORKERS[0]);
 
-  // --- DATA FETCHING (useEffect) ---
+  // Inject global styles once
+  useEffect(() => {
+    if (!document.getElementById('transfers-custom-styles')) {
+      const style = document.createElement('style');
+      style.id = 'transfers-custom-styles';
+      style.textContent = globalStyles;
+      document.head.appendChild(style);
+    }
+  }, []);
+
+  // Fetch data
   useEffect(() => {
     const fetchTransfers = async () => {
       try {
-        const response = await axios.get(API_URL, {
-          withCredentials: true 
-        });
-        
-        const transferData = response.data?.data?.data || []; 
+        const response = await axios.get(API_URL, { withCredentials: true });
+        const transferData = response.data?.data?.data || [];
         setTransfers(transferData);
         setIsLoading(false);
       } catch (err) {
@@ -61,18 +297,14 @@ function TransfertComponent() {
     };
 
     fetchTransfers();
-  }, []); 
+  }, []);
 
-
-  // --- MULTI-LEVEL GROUPING LOGIC (useMemo) ---
+  // Group transfers
   const groupedTransfersByWorkerTimeAndClient = useMemo(() => {
     const allGroups = {};
-
-    transfers.forEach(transfer => {
+    transfers.forEach((transfer) => {
       const city = transfer.to_city.toLowerCase();
       const transferDate = new Date(transfer.timestamps.created);
-
-      // 1. Determine Worker
       let workerName = UNASSIGNED_WORKER;
       for (const [worker, cities] of Object.entries(WORKER_CITY_MAP)) {
         if (cities.includes(city)) {
@@ -80,211 +312,154 @@ function TransfertComponent() {
           break;
         }
       }
-
-      // 2. Determine Time Slot
       const timeSlot = getTimeSlot(transferDate);
-
-      // 3. Determine Client Brand
       const clientBrand = transfer.client?.brand?.name || 'Unknown Client';
-      
-      // Initialize groups
       if (!allGroups[workerName]) allGroups[workerName] = {};
       if (!allGroups[workerName][timeSlot]) allGroups[workerName][timeSlot] = {};
       if (!allGroups[workerName][timeSlot][clientBrand]) allGroups[workerName][timeSlot][clientBrand] = [];
-      
       allGroups[workerName][timeSlot][clientBrand].push(transfer);
     });
-
     return allGroups;
   }, [transfers]);
 
-
-  // --- RENDER LOGIC (Minimalist Design) ---
+  // --- LOADING SKELETON ---
   if (isLoading) {
     return (
-      <div style={{ padding: '40px', textAlign: 'center', fontSize: '1.2em' }}>
-        <h2>Loading Transfers... ⏳</h2>
+      <div className="transfers-app">
+        <h1 className="header">📦 Pending Transfers by Destination Store</h1>
+        <div className="tabs-container">
+          <div className="tabs">
+            {ALL_WORKERS.map((_, i) => (
+              <div key={i} className="tab-btn skeleton" style={{ width: '80px', height: '36px' }}></div>
+            ))}
+          </div>
+          <div className="process-btn skeleton" style={{ width: '140px', height: '36px' }}></div>
+        </div>
+
+        <div>
+          {['Morning', 'Evening'].map((slot, idx) => (
+            <div key={slot} className="slot-card">
+              <div className={`slot-header ${idx === 0 ? 'morning' : 'evening'}`}>
+                🕒 {slot} Transfers (Today)
+              </div>
+              <div className="clients-grid">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="client-card">
+                    <div className="client-header">
+                      <div className="skeleton" style={{ width: '100px', height: '18px' }}></div>
+                      <div className="skeleton" style={{ width: '50px', height: '20px' }}></div>
+                    </div>
+                    <div className="space-y-2 mt-2">
+                      {[1, 2].map((j) => (
+                        <div key={j} className="product-item">
+                          <div className="skeleton" style={{ width: '120px', height: '16px' }}></div>
+                          <div className="skeleton" style={{ width: '20px', height: '16px' }}></div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
 
+  // --- ERROR STATE ---
   if (error) {
     return (
-      <div style={{ padding: '40px', color: 'darkred', backgroundColor: '#fee', border: '1px solid darkred', margin: '20px' }}>
-        <h2>Error Loading Data ❌</h2>
-        <p>{error}</p>
+      <div className="transfers-app">
+        <div className="error-message">
+          <h2 style={{ margin: 0, fontSize: '1.5rem', marginBottom: '1rem', fontWeight: 600 }}>Error Loading Data ❌</h2>
+          <p>{error}</p>
+        </div>
       </div>
     );
   }
 
+  // --- SUCCESS STATE ---
   const activeWorkerData = groupedTransfersByWorkerTimeAndClient[activeWorker] || {};
 
   return (
-    <div style={{ padding: '20px', fontFamily: 'system-ui, sans-serif', backgroundColor: '#f4f7f9', minHeight: '100vh' }}>
-      
-      {/* HEADER */}
-      <h1 style={{ color: '#333', fontSize: '1.8em', marginBottom: '20px' }}>
-        📦 Pending Transfers by Destination Store
-      </h1>
+    <div className="transfers-app">
+      <h1 className="header">📦 Pending Transfers by Destination Store</h1>
 
-      {/* WORKER TABS (Top Navigation Bar) */}
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        backgroundColor: '#fff',
-        borderRadius: '10px',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-        padding: '10px',
-        marginBottom: '40px'
-      }}>
-        <div style={{ display: 'flex', gap: '5px' }}>
-          {ALL_WORKERS.map(worker => (
+      <div className="tabs-container">
+        <div className="tabs">
+          {ALL_WORKERS.map((worker) => (
             <button
               key={worker}
               onClick={() => setActiveWorker(worker)}
-              style={{
-                padding: '8px 15px',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontSize: '0.9em',
-                fontWeight: activeWorker === worker ? 'bold' : 'normal',
-                backgroundColor: activeWorker === worker ? '#6c5ce7' : 'transparent',
-                color: activeWorker === worker ? 'white' : '#6c5ce7',
-                transition: 'all 0.2s ease',
-              }}
+              className={`tab-btn ${activeWorker === worker ? 'active' : ''}`}
             >
               {worker}
             </button>
           ))}
         </div>
-        
-        <button style={{
-            padding: '8px 15px',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            backgroundColor: '#4CAF50', 
-            color: 'white',
-            fontWeight: 'bold',
-            fontSize: '0.9em'
-        }}>
-            Mark as Processed <span style={{ backgroundColor: 'white', color: '#4CAF50', padding: '1px 5px', borderRadius: '4px', marginLeft: '5px' }}>1</span>
+        <button className="process-btn">
+          Mark as Processed <span className="process-badge">1</span>
         </button>
       </div>
 
-
-      {/* TRANSFER GROUPS BY TIME SLOT */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
-        
+      <div>
         {Object.entries(activeWorkerData)
-            // Sort to put Morning first
-            .sort(([slotA], [slotB]) => {
-                if (slotA.includes('Morning')) return -1;
-                return 1;
-            })
-            .map(([timeSlot, clientGroups]) => {
-                const isMorning = timeSlot.includes('Morning');
-                
-                return (
-                    <div key={timeSlot} style={{ 
-                        borderRadius: '10px', 
-                        padding: '10px 0 20px 0', 
-                        backgroundColor: '#fff',
-                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                    }}>
-                        {/* Time Slot Header (Clean, flat bar) */}
-                        <div style={{ 
-                            padding: '10px 20px', 
-                            marginBottom: '15px',
-                            backgroundColor: isMorning ? '#fffceb' : '#f0f0ff',
-                            borderLeft: `5px solid ${isMorning ? '#FFC300' : '#6c5ce7'}`,
-                        }}>
-                             <h2 style={{ 
-                                margin: '0', 
-                                fontSize: '1.2em', 
-                                color: isMorning ? '#FFC300' : '#6c5ce7',
-                            }}>
-                                {timeSlot}
-                            </h2>
+          .sort(([slotA]) => (slotA.includes('Morning') ? -1 : 1))
+          .map(([timeSlot, clientGroups]) => {
+            const isMorning = timeSlot.includes('Morning');
+            const clientEntries = Object.entries(clientGroups);
+
+            return (
+              <div key={timeSlot} className="slot-card">
+                <div className={`slot-header ${isMorning ? 'morning' : 'evening'}`}>
+                  🕒 {timeSlot}
+                </div>
+
+                {clientEntries.length === 0 ? (
+                  <p className="empty-state">No transfers for {activeWorker} in this time slot.</p>
+                ) : (
+                  <div className="clients-grid">
+                    {clientEntries.map(([clientBrand, transfersList]) => {
+                      const productCounts = transfersList.reduce((acc, transfer) => {
+                        transfer.products.forEach((item) => {
+                          const productName = item.product?.name || 'Unknown Product';
+                          acc[productName] = (acc[productName] || 0) + (item.quantity || 1);
+                        });
+                        return acc;
+                      }, {});
+
+                      return (
+                        <div key={clientBrand} className="client-card">
+                          <div className="client-header">
+                            <span className="client-title">{clientBrand}</span>
+                            <span className="client-count">{transfersList.length} total</span>
+                          </div>
+                          <div>
+                            {Object.entries(productCounts).length === 0 ? (
+                              <div className="product-item" style={{ color: '#9ca3af', fontStyle: 'italic' }}>
+                                No products listed
+                              </div>
+                            ) : (
+                              Object.entries(productCounts).map(([name, count]) => (
+                                <div key={name} className="product-item">
+                                  <span className="product-name">{name}</span>
+                                  <span className="product-qty">{count}</span>
+                                </div>
+                              ))
+                            )}
+                          </div>
                         </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
 
-                        {/* Client Cards Grid */}
-                        {Object.keys(clientGroups).length === 0 ? (
-                            <p style={{ textAlign: 'center', color: '#666', padding: '10px' }}>No transfers for {activeWorker} in this time slot.</p>
-                        ) : (
-                            <div style={{ display: 'flex', flexWrap: 'wrap', padding: '0 20px', gap: '15px' }}>
-                                {Object.entries(clientGroups).map(([clientBrand, transfersList]) => {
-                                    // Calculate total products per unique product for this client
-                                    const productCounts = transfersList.reduce((acc, transfer) => {
-                                        transfer.products.forEach(item => {
-                                            const productName = item.product?.name || 'Unknown Product';
-                                            acc[productName] = (acc[productName] || 0) + (item.quantity || 1);
-                                        });
-                                        return acc;
-                                    }, {});
-
-                                    const totalTransfers = transfersList.length;
-
-                                    return (
-                                        <div key={clientBrand} style={{ 
-                                            width: '200px', // Fixed width for clean column layout
-                                            minHeight: '150px',
-                                            border: '1px solid #eee', 
-                                            borderRadius: '8px', 
-                                            padding: '10px', 
-                                            backgroundColor: '#fefefe',
-                                            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                                        }}>
-                                            
-                                            {/* Client Brand Header */}
-                                            <h3 style={{ margin: '0 0 8px 0', fontSize: '1em', color: '#333', position: 'relative' }}>
-                                                {clientBrand} 
-                                                <span style={{ 
-                                                    position: 'absolute',
-                                                    top: '-5px',
-                                                    right: '-5px',
-                                                    backgroundColor: '#6c5ce7', 
-                                                    color: 'white', 
-                                                    padding: '2px 6px', 
-                                                    borderRadius: '4px', 
-                                                    fontSize: '0.7em',
-                                                    fontWeight: 'normal'
-                                                }}>
-                                                    {totalTransfers} total
-                                                </span>
-                                            </h3>
-                                            
-                                            {/* Products List (Minimalist) */}
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                                                {Object.entries(productCounts).map(([productName, count]) => (
-                                                    <div key={productName} style={{ 
-                                                        textAlign: 'center',
-                                                        padding: '4px 0',
-                                                        backgroundColor: '#f7f7f7',
-                                                        borderRadius: '3px',
-                                                    }}>
-                                                        <p style={{ margin: '0', fontSize: '0.85em', color: '#555' }}>{productName}</p>
-                                                        <span style={{ color: '#d9534f', fontWeight: 'bold', fontSize: '1em' }}>{count}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
-                    </div>
-                );
-            })}
-        
-        {/* Handle case where worker has no transfers at all */}
         {Object.keys(activeWorkerData).length === 0 && (
-             <div style={{ textAlign: 'center', padding: '40px', border: '1px solid #ddd', borderRadius: '10px', backgroundColor: '#fff' }}>
-                <p style={{ margin: '0', fontSize: '1.2em', color: '#8a6d3b' }}>No transfers found for {activeWorker}.</p>
-            </div>
+          <div className="empty-state">📭 No transfers found for {activeWorker}.</div>
         )}
       </div>
     </div>
